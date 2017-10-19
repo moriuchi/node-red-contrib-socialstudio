@@ -1,0 +1,424 @@
+
+<script type="text/x-red" data-template-name="socialstudio-credentials">
+    <div class="form-tips" id="node-config-socialstudio-tooltip">
+    </div>
+    <div id="node-config-socialstudio-client-keys">
+        <div class="form-row">
+            <label for="node-config-input-userName"><i class="fa fa-user"></i> User Name</label>
+            <input type="password" id="node-config-input-userName" placeholder="username in Social Studio">
+        </div>
+        <div class="form-row">
+            <label for="node-config-input-password"><i class="fa fa-key"></i> Password</label>
+            <input type="password" id="node-config-input-password" placeholder="password in Social Studio">
+        </div>
+        <div class="form-row">
+            <label for="node-config-input-clientId"><i class="fa fa-user"></i> App Key</label>
+            <input type="password" id="node-config-input-clientId" placeholder="client key in the application">
+        </div>
+        <div class="form-row">
+            <label for="node-config-input-clientSecret"><i class="fa fa-key"></i> App Secret</label>
+            <input type="password" id="node-config-input-clientSecret" placeholder="client secret in the application">
+        </div>
+        <div class="form-row">
+           <label>&nbsp;</label>
+           <a class="btn" id="node-config-start-auth" href="#" target="_blank">Authenticate with socialstudio</a>
+        </div>
+    </div>
+    <div id="node-config-socialstudio">
+        <div class="form-row">
+            <label><i class="fa fa-user"></i> socialstudio User</label>
+            <span id="node-config-socialstudio-displayName" class="input-xlarge uneditable-input"></span>
+        </div>
+        <input type="hidden" id="node-config-input-displayName">
+    </div>
+</script>
+
+<script type="text/javascript">
+(function() {
+    RED.nodes.registerType('socialstudio-credentials',{
+        category: 'config',
+        defaults: {
+            displayName: {value:""}
+        },
+        credentials: {
+            displayName: {type:"text"},
+            userName: { type: "password"},
+            password: { type: "password"},
+            clientId: { type: "password"},
+            clientSecret: { type: "password"}
+        },
+        label: function() {
+            return this.displayName || 'SocialStudio';
+        },
+        exportable: false,
+        oneditprepare: function() {
+            var id = this.id;
+            var pathname = document.location.pathname;
+            if (pathname.slice(-1) != "/") {
+                pathname += "/";
+            }
+            var callback = location.protocol + "//";
+            callback += (location.port == "")? location.hostname : location.hostname + ":" + location.port;
+            callback += pathname + "socialstudio-credentials/auth/callback";
+            $("#node-config-socialstudio-tooltip").html("<p>Please configure the authorized <b>Redirect URIs</b> of your app to include the following url:</p>\n<code>"+callback+"</code>");
+
+            function updatesocialstudioAuthButton() {
+                var v1 = $("#node-config-input-userName").val();
+                var v2 = $("#node-config-input-password").val();
+                var v3 = $("#node-config-input-clientId").val();
+                var v4 = $("#node-config-input-clientSecret").val();
+                $("#node-config-start-auth").toggleClass("disabled",(v1.length === 0 || v2.length === 0 || v3.length === 0 || v4.length === 0));
+            }
+            $("#node-config-input-userName").on('change keydown paste input',updatesocialstudioAuthButton);
+            $("#node-config-input-password").on('change keydown paste input',updatesocialstudioAuthButton);
+            $("#node-config-input-clientId").on('change keydown paste input',updatesocialstudioAuthButton);
+            $("#node-config-input-clientSecret").on('change keydown paste input',updatesocialstudioAuthButton);
+
+            function updatesocialstudioDisplayName(dn) {
+                $("#node-config-socialstudio-tooltip").hide();
+                $("#node-config-socialstudio-client-keys").hide();
+                $("#node-config-socialstudio").show();
+                $("#node-config-input-displayName").val(dn);
+                $("#node-config-socialstudio-displayName").html(dn);
+            }
+
+            function pollsocialstudioCredentials() {
+                $.getJSON('credentials/socialstudio-credentials/'+id,function(data) {
+                    if (data.displayName) {
+                        $("#node-config-dialog-ok").button("enable");
+                        updatesocialstudioDisplayName(data.displayName);
+                        socialstudioNode.socialstudio = id;
+                        delete window.socialstudioConfigNodeIntervalId;
+                    } else {
+                        window.socialstudioConfigNodeIntervalId = window.setTimeout(pollsocialstudioCredentials,2000);
+                    }
+                });
+             }
+
+            updatesocialstudioAuthButton();
+
+            if (this.displayName) {
+                updatesocialstudioDisplayName(this.displayName);
+            } else {
+                $("#node-config-socialstudio-tooltip").show();
+                $("#node-config-socialstudio-client-keys").show();
+                $("#node-config-socialstudio").hide();
+                $("#node-config-dialog-ok").button("disable");
+            }
+
+            $("#node-config-start-auth").mousedown(function() {
+                var userName = $("#node-config-input-userName").val();
+                var password = $("#node-config-input-password").val();
+                var clientId = $("#node-config-input-clientId").val();
+                var clientSecret = $("#node-config-input-clientSecret").val();
+                var url = 'socialstudio-credentials/auth?id='+id+'&userName='+userName+"&password="+encodeURIComponent(password)+"&clientId="+clientId+'&clientSecret='+clientSecret+"&callback="+encodeURIComponent(callback);
+                $(this).attr("href",url);
+                window.socialstudioConfigNodeIntervalId = window.setTimeout(pollsocialstudioCredentials,2000);
+            });
+            $("#node-config-start-auth").click(function(e) {
+                var userName = $("#node-config-input-userName").val();
+                var password = $("#node-config-input-password").val();
+                var clientId = $("#node-config-input-clientId").val();
+                var clientSecret = $("#node-config-input-clientSecret").val();
+                if (userName === "" || password === "" || clientId === "" || clientSecret === "") {
+                    e.preventDefault();
+                }
+            });
+        },
+        oneditsave: function() {
+            if (window.socialstudioConfigNodeIntervalId) {
+                window.clearTimeout(window.socialstudioConfigNodeIntervalId);
+                delete window.socialstudioConfigNodeIntervalId;
+            }
+        },
+        oneditcancel: function() {
+            if (window.socialstudioConfigNodeIntervalId) {
+                window.clearTimeout(window.socialstudioConfigNodeIntervalId);
+                delete window.socialstudioConfigNodeIntervalId;
+            }
+        }
+    });
+})();
+</script>
+
+<script type="text/x-red" data-template-name="socialstudio-topic">
+    <div class="form-row">
+        <label for="node-input-socialstudio"><i class="fa fa-user"></i> SocialStudio</label>
+        <input type="text" id="node-input-socialstudio">
+    </div>
+    <div class="form-row">
+        <label for="node-input-workspaceid"><i class="fa fa-tag"></i> Workspace</label>
+        <select id="node-input-workspaceid" >
+            <option value=""> == select Workspace == </option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-topicid"><i class="fa fa-tag"></i> Topic</label>
+        <select id="node-input-topicid" >
+            <option value=""> == select Topic == </option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-mediatype"><i class="fa fa-tag"></i> Media Type</label>
+        <div id="node-input-mediatypegroup" style="display: inline-block; width: auto; vertical-align: top;">
+        </div>
+    </div>
+    <div class="form-row">
+        <label for="node-input-keywordgroup"><i class="fa fa-tag"></i> KeywordGroup</label>
+        <div id="node-input-keywordgroups" style="display: inline-block; width: auto; vertical-align: top;">
+        </div>
+    </div>
+    <div class="form-row">
+        <label for="node-input-startDate"><i class="fa fa-tag"></i> Start Date</label>
+        <input type="text" id="node-input-startDate" placeholder="2015-01-01">
+    </div>
+    <div class="form-row">
+        <label for="node-input-endDate"><i class="fa fa-tag"></i> End Date</label>
+        <input type="text" id="node-input-endDate" placeholder="2015-01-01">
+    </div>
+    <div class="form-row">
+        <label for="node-input-limit"><i class="fa fa-tag"></i> limit</label>
+        <input type="text" id="node-input-limit" placeholder="1 to 1000">
+    </div>
+    <div class="form-tips">
+        <b>Note: </b>Topic: Topic profile ids to get posts for.</br>
+        limit: Number of posts to return in the call (defaults to 25, accepts values from 1 to 1000)
+    </div>
+    <hr align="middle" >
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="socialstudio-topic">
+    <p>socialstudio input node. </p>
+</script>
+
+<script type="text/javascript">
+    var socialstudioNode;
+    function updateWorkspacesList(lists) {
+        var wslist = $("#node-input-workspaceid");
+        wslist.children("option").remove();
+        wslist.append('<option value=""> == select Workspace == </option>');
+        $.each(lists.workspaces.response, function(i, opt){
+            wslist.append('<option value="' + opt.id + '">' + opt.name + '</option>');
+        });
+        wslist.val(socialstudioNode.workspaceid);
+
+        var mediatypegroup = $("#node-input-mediatypegroup");
+        mediatypegroup.children().remove();
+        $.each(lists.mediaTypes.data, function(i, opt){
+            mediatypegroup.append('<span style="display: inline-block; vertical-align: top;">'
+                    + '<input type="checkbox" id="mediatype' + opt.id + '" name="node-input-mediatype"'
+                    + ' value="' + opt.id + '" style="display: inline-block; width: auto; ">'
+                    + '<label for="mediatype' + opt.id + '" style="vertical-align: top;">' + opt.title + '</label>'
+                    + '</span>');
+        });
+
+        var workspaceid = $("#node-input-workspaceid option:selected").val();
+        if(workspaceid){
+            window.socialstudioTopicNodeIntervalId = window.setTimeout(pollSocialStudioTopics,2000);
+        }
+    }
+
+    function pollSpcialStudioWorkspaces() {
+        if(socialstudioNode.socialstudio && $("#node-input-workspaceid")[0]){
+            $.getJSON('socialstudio-topic/workspaces?id='+socialstudioNode.id+'&credentials='+socialstudioNode.socialstudio,
+                function(data) {
+                    if (data.workspaces && data.mediaTypes) {
+                        updateWorkspacesList(data);
+                        delete window.socialstudioWorkspaceIntervalId;
+                    } else {
+                        window.socialstudioWorkspaceIntervalId = window.setTimeout(pollSpcialStudioWorkspaces,2000);
+                    }
+                });
+        }else{
+            window.socialstudioWorkspaceIntervalId = window.setTimeout(pollSpcialStudioWorkspaces,2000);
+        }
+    }
+
+
+    function updateTopicsList(lists) {
+        var topicslist = $("#node-input-topicid");
+        topicslist.children("option").remove();
+        topicslist.append('<option value=""> == select Topic == </option>');
+        $.each(lists.data, function(i, opt){
+            topicslist.append('<option value="' + opt.id + '">' + opt.title + '</option>');
+        });
+        topicslist.val(socialstudioNode.topicid);
+
+        var topicid = $("#node-input-topicid option:selected").val();
+        if(topicid){
+            window.socialstudioTopicDetailNodeIntervalId = window.setTimeout(pollSocialStudioTopicDetail,2000);
+        }
+    }
+
+    function pollSocialStudioTopics() {
+        var workspaceid = $("#node-input-workspaceid option:selected").val();
+        if(socialstudioNode.socialstudio && workspaceid){
+            $.getJSON('socialstudio-topic/topics?id='+socialstudioNode.id+'&credentials='+socialstudioNode.socialstudio+'&workspaceid='+workspaceid,
+                function(data) {
+                    if (data.data) {
+                        $("#node-dialog-ok").button("enable");
+                        updateTopicsList(data);
+                        delete window.socialstudioTopicNodeIntervalId;
+                    } else {
+                        window.socialstudioTopicNodeIntervalId = window.setTimeout(pollSocialStudioTopics,2000);
+                    }
+                });
+        }else{
+            window.socialstudioTopicNodeIntervalId = window.setTimeout(pollSocialStudioTopics,2000);
+        }
+     }
+
+
+    function setTopicDetail(data) {
+        var topicdetail = data.data[0];
+
+        // set mediaType
+        var mediatypes = socialstudioNode.mediatype;
+        if (mediatypes) {
+            var aryType = mediatypes.split(",");
+            for(var i=0; i<aryType.length; i++){
+                $("#mediatype" + aryType[i]).attr("checked", true);
+            }
+        } else if (topicdetail.mediaTypes.length > 0) {
+            $.each(topicdetail.mediaTypes, function(j, opt){
+                $("#mediatype" + opt.id).attr("checked", true);
+            });
+        } else {
+            $("[name=node-input-mediatype]").each(function(){ this.checked = true; });
+        }
+
+
+        // set keywordGroup
+        var keywordlist = $("#node-input-keywordgroups");
+        keywordlist.children().remove();
+        $.each(topicdetail.keywordGroups, function(i, opt){
+            keywordlist.append('<span style="display: inline-block; vertical-align: top;">'
+                    + '<input type="checkbox" id="keywordgroup' + opt.id + '" name="node-input-keywordgroup"'
+                    + ' value="' + opt.id + '" style="display: inline-block; width: auto; " >'
+                    + '<label for="keywordgroup' + opt.id + '" style="vertical-align: top;">' + opt.title + '</label>'
+                    + '</span>');
+        });
+
+        var keywordGroups = socialstudioNode.keywordgroup;
+        if (keywordGroups) {
+            var aryType = keywordGroups.split(",");
+            for(var i=0; i<aryType.length; i++){
+                $("#keywordgroup" + aryType[i]).attr("checked", true);
+            }
+        } else {
+            $("[name=node-input-keywordgroup]").each(function(){ this.checked = true; });
+        }
+
+    }
+
+    function pollSocialStudioTopicDetail() {
+        var topicid = $("#node-input-topicid option:selected").val();
+        if(socialstudioNode.socialstudio && topicid){
+            $.getJSON('socialstudio-topic/topicdetail?id='+socialstudioNode.id+'&credentials='+socialstudioNode.socialstudio+'&topicid='+topicid,
+                function(data) {
+                    if (data.data) {
+                        $("#node-dialog-ok").button("enable");
+                        setTopicDetail(data);
+                        delete window.socialstudioTopicDetailNodeIntervalId;
+                    } else {
+                        window.socialstudioTopicDetailNodeIntervalId = window.setTimeout(pollSocialStudioTopicDetail,2000);
+                    }
+                });
+        }else{
+            window.socialstudioTopicDetailNodeIntervalId = window.setTimeout(pollSocialStudioTopicDetail,2000);
+        }
+     }
+
+
+    RED.nodes.registerType('socialstudio-topic',{
+        category: 'analysis-input',
+        color:"#C0DEED",
+        defaults: {
+            socialstudio: {type:"socialstudio-credentials",required:true},
+            workspaceid: {value:""},
+            topicid: {value:""},
+            mediatype: {value: ""},
+            keywordgroup: {value:""},
+            startDate: {value:""},
+            endDate: {value:""},
+            limit: {value:""},
+            name: {value:""}
+        },
+        inputs:1,
+        outputs:1,
+        label: function() {
+            return this.name||'socialstudio';
+        },
+        oneditprepare: function() {
+            socialstudioNode = this;
+            //$("#node-dialog-ok").button("disable");
+            $("#node-input-workspaceid").change(function(){
+                var id = $("#node-input-workspaceid option:selected").val();
+                if(id && socialstudioNode.workspaceid && id != socialstudioNode.workspaceid){
+                    socialstudioNode.topicid = "";
+                    socialstudioNode.mediatype = "";
+                    socialstudioNode.keywordgroup = "";
+                }
+                if(id){
+                    window.socialstudioTopicNodeIntervalId = window.setTimeout(pollSocialStudioTopics,2000);
+                }
+            });
+            $("#node-input-topicid").change(function(){
+                var id = $("#node-input-topicid option:selected").val();
+                if(id && socialstudioNode.topicid && id != socialstudioNode.topicid){
+                    socialstudioNode.mediatype = "";
+                    socialstudioNode.keywordgroup = "";
+                }
+                if(id){
+                    window.socialstudioTopicDetailNodeIntervalId = window.setTimeout(pollSocialStudioTopicDetail,2000);
+                }
+            });
+            window.socialstudioWorkspaceIntervalId = window.setTimeout(pollSpcialStudioWorkspaces,2000);
+        },
+        oneditsave: function() {
+            if (window.socialstudioWorkspaceIntervalId) {
+                window.clearTimeout(window.socialstudioWorkspaceIntervalId);
+                delete window.socialstudioWorkspaceIntervalId;
+            }
+            if (window.socialstudioTopicNodeIntervalId) {
+                window.clearTimeout(window.socialstudioTopicNodeIntervalId);
+                delete window.socialstudioTopicNodeIntervalId;
+            }
+            if (window.socialstudioTopicDetailNodeIntervalId) {
+                window.clearTimeout(window.socialstudioTopicDetailNodeIntervalId);
+                delete window.socialstudioTopicDetailNodeIntervalId;
+            }
+            var checkedel = $("[name=node-input-mediatype]:checked");
+            var aryChk = [];
+            for(var i=0; i<checkedel.length; i++){
+                aryChk.push(checkedel[i].value);
+            }
+            socialstudioNode.mediatype = aryChk.join(",");
+
+            var kgcheckedel = $("[name=node-input-keywordgroup]:checked");
+            var aryChkKG = [];
+            for(var i=0; i<kgcheckedel.length; i++){
+                aryChkKG.push(kgcheckedel[i].value);
+            }
+            socialstudioNode.keywordgroup = aryChkKG.join(",");
+        },
+        oneditcancel: function() {
+            if (window.socialstudioWorkspaceIntervalId) {
+                window.clearTimeout(window.socialstudioWorkspaceIntervalId);
+                delete window.socialstudioWorkspaceIntervalId;
+            }
+            if (window.socialstudioTopicNodeIntervalId) {
+                window.clearTimeout(window.socialstudioTopicNodeIntervalId);
+                delete window.socialstudioTopicNodeIntervalId;
+            }
+            if (window.socialstudioTopicDetailNodeIntervalId) {
+                window.clearTimeout(window.socialstudioTopicDetailNodeIntervalId);
+                delete window.socialstudioTopicDetailNodeIntervalId;
+            }
+        }
+    });
+</script>
